@@ -1,0 +1,15 @@
+# LLM Burner
+
+Локальный однопользовательский тестер OpenAI-совместимых Chat Completions endpoints. Пользователь задаёт полный endpoint или base URL, API key, model, system context, user prompt, concurrency, total requests, max output tokens и timeout. Ключ живёт только в памяти процесса и формы и не сохраняется в SQLite, localStorage или экспорте. Контекст и результаты сохраняются локально.
+
+React + Vite, Node.js >=22.13 + Express, встроенный node:sqlite. Сервер по умолчанию на 127.0.0.1:4310. Единственный активный прогон, fixed-concurrency workers без повторов запросов. Обновление страницы не останавливает прогон; закрытие сервера помечает незавершённый прогон interrupted при следующем старте. Остановка отменяет активные HTTP-запросы и не запускает новые.
+
+UI: прохладный светлый фон #F3F6FA, белая рабочая поверхность #FFFFFF, текст #172338, вторичный #617087, акцент #315BDD, успешный #178264. Системный sans-serif, tabular numerals. Узкая навигация, форма слева, широкая область метрик и графика справа. Русский интерфейс, адаптация под мобильные экраны, keyboard focus, reduced motion. Пустые состояния без выдуманных результатов. Демо-прогон явно маркирован и генерирует синтетические SSE ответы без внешнего API.
+
+Метрики: aggregate output tokens / wall-clock seconds; average request TPS = среднее completion_tokens / request duration среди успешных запросов с usage; TTFT = первый непустой content/reasoning delta минус начало HTTP-запроса; latency p50/p95 по успешным запросам. Все тайминги монотонные. Duration включает ожидание первого токена, в UI TPS запроса помечен end-to-end. Чанки никогда не считаются токенами. Если хотя бы один успешный запрос без completion_tokens, общий TPS неизвестен; отображаются измеренные токены и coverage. Ошибки/отмены не участвуют в успешных token/latency aggregates; длительность включает всё время нагрузки. График показывает накопленный throughput по завершённым успешным запросам, не instantaneous token rate.
+
+SSE parser поддерживает split frames, CRLF, multiline data, usage-only frames, [DONE], reasoning deltas. Ошибка HTTP, stream error, malformed JSON и premature EOF фиксируются как ошибки. Потоки ограничены по размеру, ответы не сохраняются целиком. По умолчанию stream_options.include_usage включён, можно выключить; max_tokens/max_completion_tokens выбирается явно. Без скрытых повторов, прогрева и автоподмены параметров.
+
+История: дата/время, status, model, endpoint, параметры, метрики и результаты каждого запроса. Просмотр, повтор параметров, удаление завершённого прогона, JSON/CSV export. CSV защищён от формул. Даты хранятся ISO UTC, показываются в локальной зоне браузера. База переживает перезапуск.
+
+Проверки: настоящие локальные HTTP/SSE fixtures для параллельности, timeout, abort, HTTP errors, incomplete streams, usage accounting; SQLite persistence/recovery; API validation и origin protection; browser smoke для запуска, истории, demo, reload, повторного запуска и responsive UI. Внешний реальный endpoint без предоставленных credentials не тестируется.
