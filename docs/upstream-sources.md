@@ -1,31 +1,33 @@
-# Источники функциональности
+# Upstream sources and feature mapping
 
-Проверены 25 сентября 2026. Использованы описания возможностей, определения и формулы. Код, UI assets и тексты документации сторонних проектов не копировались; инструменты не добавлены как зависимости. Ниже зафиксированы просмотренные версии, а не плавающие ссылки main.
+[Back to the README](../README.md)
 
-| Источник | Версия | Что адаптировано в LLM Burner |
+The references below were reviewed on September 25, 2026. They informed feature selection, definitions, and formulas. Third-party source code, UI assets, and documentation text were not copied, and these projects are not runtime dependencies. Links point to the reviewed revisions rather than a moving default branch.
+
+| Source | Reviewed revision | Ideas adapted in LLM Burner |
 | --- | --- | --- |
-| [NVIDIA AIPerf](https://github.com/ai-dynamo/aiperf/tree/62510dc2b2d86a2d7a07be1a4eacdefb03369f89) | `62510dc2b2d86a2d7a07be1a4eacdefb03369f89`, Apache-2.0 | Расширенные streaming/usage метрики, warmup, load profiles, goodput/SLO, continuous usage correction |
-| [GuideLLM](https://github.com/vllm-project/guidellm/tree/7f06bd31e919e9a052df554eaac053aff1557697) | `7f06bd31e919e9a052df554eaac053aff1557697`, Apache-2.0 | Сравнение latency и throughput при разных профилях нагрузки, последовательные ступени |
-| [EvalScope](https://github.com/modelscope/evalscope/blob/06b4c67bc37d5482bdcca8b7a3dee335b9e6b5a7/docs/en/user_guides/stress_test/quick_start.md) | `06b4c67bc37d5482bdcca8b7a3dee335b9e6b5a7`, Apache-2.0 | Наборы prompts, серии concurrency, подробные результаты и распределения |
-| [llm-api-bench](https://github.com/idemerge/llm-api-bench/tree/c83e2d796796e06e929b922614ad0cd9c39a3be0) | `c83e2d796796e06e929b922614ad0cd9c39a3be0`, MIT | Идея самостоятельного web benchmark, истории и сравнения |
+| [NVIDIA AIPerf](https://github.com/ai-dynamo/aiperf/tree/62510dc2b2d86a2d7a07be1a4eacdefb03369f89) | `62510dc2b2d86a2d7a07be1a4eacdefb03369f89` · Apache-2.0 | Streaming and usage metrics, warmup, load profiles, SLO goodput, and continuous-usage correction |
+| [GuideLLM](https://github.com/vllm-project/guidellm/tree/7f06bd31e919e9a052df554eaac053aff1557697) | `7f06bd31e919e9a052df554eaac053aff1557697` · Apache-2.0 | Latency and throughput comparisons across load profiles and sequential stages |
+| [EvalScope](https://github.com/modelscope/evalscope/blob/06b4c67bc37d5482bdcca8b7a3dee335b9e6b5a7/docs/en/user_guides/stress_test/quick_start.md) | `06b4c67bc37d5482bdcca8b7a3dee335b9e6b5a7` · Apache-2.0 | Prompt datasets, concurrency series, detailed results, and distributions |
+| [llm-api-bench](https://github.com/idemerge/llm-api-bench/tree/c83e2d796796e06e929b922614ad0cd9c39a3be0) | `c83e2d796796e06e929b922614ad0cd9c39a3be0` · MIT | A standalone web benchmark with history and run comparison |
 
-## AIPerf → наши компоненты
+## AIPerf concepts and local implementation
 
-- [Metrics reference](https://github.com/ai-dynamo/aiperf/blob/62510dc2b2d86a2d7a07be1a4eacdefb03369f89/docs/metrics-reference.md): `transport.mjs` собирает TTFT, TTFO, TTST, decode duration, ICL; `metrics.mjs` агрегирует распределения, throughput, usage и goodput. TPOT/decode TPS — оценки, provenance хранится явно. Время между чанками не выдаётся за точные token timestamps.
-- [Goodput](https://github.com/ai-dynamo/aiperf/blob/62510dc2b2d86a2d7a07be1a4eacdefb03369f89/docs/tutorials/goodput.md): пользовательские ограничения TTFT/latency/TPOT; отдельно pass/fail/unknown.
-- [Warmup](https://github.com/ai-dynamo/aiperf/blob/62510dc2b2d86a2d7a07be1a4eacdefb03369f89/docs/tutorials/warmup.md): отдельная фаза перед каждой ступенью, не входит в измеряемое время/метрики/оценку стоимости.
-- [Request rate and concurrency](https://github.com/ai-dynamo/aiperf/blob/62510dc2b2d86a2d7a07be1a4eacdefb03369f89/docs/tutorials/request-rate-concurrency.md) и [arrival patterns](https://github.com/ai-dynamo/aiperf/blob/62510dc2b2d86a2d7a07be1a4eacdefb03369f89/docs/tutorials/arrival-patterns.md): concurrency либо bounded RPS scheduler с constant/Poisson интервалами, детерминированный seed и schedule lag.
-- [Ramping](https://github.com/ai-dynamo/aiperf/blob/62510dc2b2d86a2d7a07be1a4eacdefb03369f89/docs/tutorials/ramping.md) и [sweeps](https://github.com/ai-dynamo/aiperf/blob/62510dc2b2d86a2d7a07be1a4eacdefb03369f89/docs/tutorials/sweeps.md): локальный разгон лимита параллельности и последовательные concurrency-ступени, а не все режимы/поисковые алгоритмы AIPerf.
+- [Metrics reference](https://github.com/ai-dynamo/aiperf/blob/62510dc2b2d86a2d7a07be1a4eacdefb03369f89/docs/metrics-reference.md): `server/transport.mjs` captures TTFT, TTFO, TTST, decode duration, and inter-chunk latency. `server/metrics.mjs` aggregates distributions, throughput, usage, and goodput. TPOT and decode TPS are estimates with explicit provenance; chunk intervals are not presented as exact token timestamps.
+- [Goodput](https://github.com/ai-dynamo/aiperf/blob/62510dc2b2d86a2d7a07be1a4eacdefb03369f89/docs/tutorials/goodput.md): user-defined TTFT, latency, and TPOT thresholds, with separate pass, fail, and unknown counts.
+- [Warmup](https://github.com/ai-dynamo/aiperf/blob/62510dc2b2d86a2d7a07be1a4eacdefb03369f89/docs/tutorials/warmup.md): a separate phase before each stage, excluded from measured time, metrics, and cost estimates.
+- [Request rate and concurrency](https://github.com/ai-dynamo/aiperf/blob/62510dc2b2d86a2d7a07be1a4eacdefb03369f89/docs/tutorials/request-rate-concurrency.md) and [arrival patterns](https://github.com/ai-dynamo/aiperf/blob/62510dc2b2d86a2d7a07be1a4eacdefb03369f89/docs/tutorials/arrival-patterns.md): target concurrency or bounded RPS scheduling with constant/Poisson intervals, reproducible schedule seeds, and dispatch-lag measurements.
+- [Ramping](https://github.com/ai-dynamo/aiperf/blob/62510dc2b2d86a2d7a07be1a4eacdefb03369f89/docs/tutorials/ramping.md) and [sweeps](https://github.com/ai-dynamo/aiperf/blob/62510dc2b2d86a2d7a07be1a4eacdefb03369f89/docs/tutorials/sweeps.md): a local concurrency ramp and sequential concurrency stages. LLM Burner does not implement every AIPerf load mode or search algorithm.
 
-## Наши отличия и границы
+## Differences and boundaries
 
-- Одна локальная Node.js process, один активный тест. Максимум 128 одновременных запросов. Это не распределённый нагрузочный генератор.
-- Только текстовый SSE Chat Completions. Нет GPU/DCGM/Prometheus, изображений/аудио/видео, trace replay, multi-turn agents, серверного профилирования DNS/TLS/TTFB и автоматического поиска SLO-предела.
-- Источник токенов — только provider usage; нет tokenizer и обещания точной synthetic input/output длины. Максимум output — лимит, не гарантия фактической длины.
-- TPOT использует интервал первого/последнего генерирующего чанка; trailing usage исключён. Continuous usage по умолчанию выключен. Клиентский overhead не вычитается.
-- ICL-перцентили строятся по средним ICL запросов; не по объединённым интервалам всех чанков. Ошибки и прогрев не входят в распределения.
-- Reasoning/cache/accepted/rejected prediction usage показываются только при сообщении сервером. Prediction tokens нельзя считать draft acceptance или speculative decode steps.
-- Good request fraction включает ошибки/отмены в знаменатель. Goodput с неизвестными необходимыми метриками не включает такой запрос. Определения и выборка явно описаны в README; совпадение чисел с другим benchmark без согласования методики не гарантируется.
-- Уникальный префикс меняет user prompt, не отключает системный prefix cache сервера. Стоимость относится только к успешным измеряемым запросам и заданным вручную ценам USD.
+- One local Node.js process runs one active test with up to 128 concurrent requests. This is not a distributed load generator.
+- Only streaming text Chat Completions are supported. There is no GPU/DCGM/Prometheus telemetry, multimodal load, trace replay, multi-turn agent workload, DNS/TLS/TTFB profiling, or automated SLO saturation search.
+- Token counts come from provider usage. There is no tokenizer-based synthetic length control; an output limit does not guarantee a particular response length.
+- TPOT uses the interval between the first and last generated chunks, excluding trailing usage events. Continuous usage is opt-in; client overhead is not subtracted.
+- Inter-chunk latency percentiles describe per-request mean intervals, not pooled intervals from every chunk. Errors and warmup are excluded from distributions.
+- Reasoning, cache, and accepted/rejected prediction usage depend on provider reporting. Prediction-token usage is not speculative-decoding step telemetry.
+- Good request fraction includes errors and cancellations in its denominator. Requests missing required SLO metrics are unknown and excluded from goodput. Results from different benchmark tools need aligned definitions before they can be compared.
+- A unique prompt prefix varies input but does not disable server-side prefix caching. Cost estimates cover successful measured requests using manually entered USD prices.
 
-Переключаемые простой/расширенный UI, локальная SQLite-история, защищённый экспорт конфигурации и сравнение 2–4 запусков реализованы непосредственно в приложении.
+The Simple/Advanced interface, local SQLite history, configuration export without API keys, request inspector, timed stress tests, and comparison of 2–4 runs are implemented directly in LLM Burner. See the [measurement guide](measurement-guide.md) for exact local definitions.

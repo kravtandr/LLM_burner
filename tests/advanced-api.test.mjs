@@ -43,3 +43,10 @@ test('Poisson schedule is seed-reproducible and approximates the configured rate
   assert.ok(mean > 190 && mean < 210, `mean ${mean}`);
   assert.equal(intervalMs(5, 'constant', a), 200);
 });
+
+test('invalid curves return actionable English client errors, not internal server failures', async t => {
+ const server=createApp({runner:{},store:{}}).listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));t.after(()=>{server.closeAllConnections();server.close();});
+ const body={endpoint:'http://localhost:8000/v1',model:'fixture',prompt:'hello',concurrency:1,totalRequests:10,maxTokens:16,timeoutSeconds:10,loadCurve:[{time:1,value:2},{time:2,value:2}]};
+ const response=await fetch(`http://127.0.0.1:${server.address().port}/api/config/validate`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+ assert.equal(response.status,400);assert.match((await response.json()).error,/Load curve/);
+});

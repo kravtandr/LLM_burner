@@ -11,6 +11,6 @@ export async function discoverModels(input) {
     const body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
     if (!Array.isArray(body.data)) throw new Error('Bad model list');
     return [...new Set(body.data.map(m => m.id).filter(id => typeof id === 'string' && id.length > 0 && id.length <= 200))].sort().slice(0, 1000);
-  } catch { throw new Error('Не удалось получить модели. Проверьте URL/ключ или укажите модель вручную; endpoint может не поддерживать /models.'); }
+  } catch { throw new Error('Could not retrieve models. Check the URL and API key, or enter a model manually; the endpoint may not support /models.'); }
   finally { config.apiKey = ''; if (response?.body && !response.body.locked) await response.body.cancel().catch(() => {}); }
 }

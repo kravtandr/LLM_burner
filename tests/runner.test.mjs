@@ -30,7 +30,7 @@ test('worker pool reaches concurrency, caps it and persists all results without 
     setTimeout(() => { active--; res.end('data: {"choices":[{"delta":{},"finish_reason":"stop"}],"usage":{"completion_tokens":10}}\n\ndata: [DONE]\n\n'); }, 35);
   });
   const { id } = s.runner.start({ ...base, endpoint: s.endpoint });
-  assert.throws(() => s.runner.start(base), /активный/);
+  assert.throws(() => s.runner.start(base), /active benchmark/);
   const run = await waitFor(s.runner, id);
   assert.equal(peak, 3); assert.equal(count, 8); assert.equal(run.status, 'completed'); assert.equal(run.metrics.success, 8); assert.equal(run.metrics.outputTokens, 80);
   assert.equal(s.store.get(id).results.length, 8); assert.ok(!JSON.stringify(run).includes(base.apiKey));

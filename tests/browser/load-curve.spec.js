@@ -1,0 +1,50 @@
+import { test, expect } from '@playwright/test';
+
+test('dark English UI edits, runs, persists and exports a custom curve; simple mode clears it', async ({ page, request }) => {
+ const errors=[];page.on('pageerror',error=>errors.push(error.message));
+ await page.goto('/');
+ await expect(page.locator('html')).toHaveAttribute('lang','en');
+ const theme=await page.evaluate(()=>({scheme:getComputedStyle(document.documentElement).colorScheme,bg:getComputedStyle(document.documentElement).backgroundColor}));
+ expect(theme.scheme).toContain('dark'); expect(theme.bg).not.toBe('rgb(243, 246, 250)');
+ await page.getByRole('switch',{name:'Advanced mode'}).click();
+ await page.getByLabel('Test name').fill('Custom curve browser test');
+ await page.getByLabel('Total requests',{exact:true}).fill('50');
+ await page.getByLabel('Max output tokens').fill('16');
+ await page.getByLabel('Warmup requests').fill('1');
+ await page.getByRole('checkbox',{name:'Enable load curve'}).check();
+ await page.getByLabel('Between points',{exact:true}).selectOption('step');
+ await page.getByLabel('Point 1 concurrency',{exact:true}).fill('1');
+ await page.getByLabel('Point 2 time in seconds',{exact:true}).fill('0.2');
+ await page.getByLabel('Point 2 concurrency',{exact:true}).fill('3');
+ await page.getByLabel('Point 3 time in seconds',{exact:true}).fill('0.55');
+ await page.getByLabel('Point 3 concurrency',{exact:true}).fill('0');
+ await expect(page.getByRole('img',{name:/Planned concurrency over time/})).toBeVisible();
+ await page.getByRole('button',{name:'Demo test',exact:true}).click();
+ await expect(page.getByTestId('run-status')).toHaveText('Completed');
+ const id=await page.evaluate(()=>sessionStorage.getItem('burner-selected'));
+ const run=await(await request.get(`/api/runs/${id}`)).json();
+ expect(run.config.loadCurve).toEqual([{time:0,value:1},{time:0.2,value:3},{time:0.55,value:0}]);
+ expect(run.metrics.success).toBeGreaterThan(1);expect(run.metrics.success).toBeLessThan(50);expect(run.warmupCompleted).toBe(1);
+ expect(run.results.filter(r=>r.phase==='measurement').every(r=>[1,3].includes(r.targetLoad))).toBe(true);
+ await expect(page.getByRole('heading',{name:'Saved load curve',exact:true})).toBeVisible();
+ const csv=await(await request.get(`/api/runs/${id}/export?format=csv`)).text();expect(csv).toContain('targetLoad');
+ await page.reload();await expect(page.getByRole('checkbox',{name:'Enable load curve'})).toBeChecked();await expect(page.getByLabel('Point 2 concurrency',{exact:true})).toHaveValue('3');
+ await page.getByRole('switch',{name:'Advanced mode'}).click();
+ await page.getByLabel('Concurrent requests',{exact:true}).fill('1');await page.getByLabel('Total requests',{exact:true}).fill('2');
+ await page.getByRole('button',{name:'Demo test',exact:true}).click();await expect(page.getByTestId('success-count')).toHaveText('2');
+ const simpleId=await page.evaluate(()=>sessionStorage.getItem('burner-selected'));const simple=await(await request.get(`/api/runs/${simpleId}`)).json();expect(simple.config.loadCurve).toEqual([]);
+ expect(errors).toEqual([]);
+});
+
+test('invalid curve cannot start stale settings and editor remains usable on mobile',async({page})=>{
+ await page.setViewportSize({width:390,height:844});await page.goto('/');await page.getByRole('switch',{name:'Advanced mode'}).click();
+ await page.getByRole('checkbox',{name:'Enable load curve'}).check();
+ await page.getByLabel('Point 2 time in seconds',{exact:true}).fill('0');
+ await expect(page.getByText('Each time must be greater than the previous time.',{exact:true})).toBeVisible();
+ let starts=0;page.on('request',r=>{if(r.method()==='POST'&&r.url().endsWith('/api/runs'))starts++;});
+ await page.getByRole('button',{name:'Demo test',exact:true}).click();expect(starts).toBe(0);
+ expect(await page.getByLabel('Point 2 time in seconds',{exact:true}).evaluate(e=>e.validity.valid)).toBe(false);
+ await page.getByRole('button',{name:'Wave',exact:true}).click();await page.getByLabel('Control',{exact:true}).selectOption('rate');
+ await expect(page.getByLabel('Point 1 requests / second',{exact:true})).toBeVisible();
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+});

@@ -68,7 +68,7 @@ test('HTTP errors do not leak the API key', async t => {
 test('timeout and cancellation abort pending requests', async t => {
   const endpoint = await provider(t, () => {});
   const result = await requestCompletion({ ...config, endpoint, timeoutSeconds: 0.03 });
-  assert.equal(result.status, 'error'); assert.match(result.error, /тайм|timeout/i);
+  assert.equal(result.status, 'error'); assert.match(result.error, /timeout/i);
   const controller = new AbortController(); setTimeout(() => controller.abort(), 20);
   assert.equal((await requestCompletion({ ...config, endpoint }, controller.signal)).status, 'cancelled');
 });
