@@ -10,7 +10,7 @@ LLM Burner is a local web app for benchmarking OpenAI-compatible LLM endpoints. 
 - **Inspect and compare:** open request/response details, compare 2–4 runs, and export results.
 - **Agent control:** connect an MCP client over Streamable HTTP to run and inspect tests.
 
-[Quick start](#quick-start) · [Test modes](#choose-a-test-mode) · [Metrics](#understand-the-main-metrics) · [MCP](#mcp-control-tests-from-an-ai-agent) · [Troubleshooting](#troubleshooting)
+[Quick start](#quick-start) · [MCP](#mcp-control-tests-from-an-ai-agent) · [Test modes](#choose-a-test-mode) · [Metrics](#understand-the-main-metrics) · [Troubleshooting](#troubleshooting)
 
 ## Quick start
 
@@ -72,7 +72,33 @@ docker compose cp llm-burner:/app/data ./backups/burner-data
 docker compose start
 ```
 
-### Run your first real test
+## MCP: control tests from an AI agent
+
+An MCP server is available at **`http://127.0.0.1:4310/mcp`** whenever the app is running. Use the app's port if you changed it. Connect with the **Streamable HTTP** transport; no separate server process is needed.
+
+Agents can discover models, validate settings, start and stop benchmarks or timed stress tests, read metrics and request details, compare runs, and manage history. MCP and the web UI share one active test and the same SQLite data. Starting a test returns its ID immediately; poll for results. Closing the client does not stop a test.
+
+For clients that accept an `mcpServers` configuration with a `url` field:
+
+```json
+{
+  "mcpServers": {
+    "llm-burner": {
+      "url": "http://127.0.0.1:4310/mcp"
+    }
+  }
+}
+```
+
+Use `http://127.0.0.1:4311/mcp` if you started Compose with `PORT=4311`. Select Streamable HTTP in clients with an explicit transport setting.
+
+The server exposes **11 tools**: `get_status`, `list_models`, `validate_test_config`, `start_test`, `stop_test`, `list_runs`, `get_run`, `list_requests`, `get_request_details`, `compare_runs`, and `delete_run`.
+
+It uses stateless HTTP POST calls with SSE responses. Opening `/mcp` in a browser returns HTTP 405; connect through an MCP client instead. Access is local, with no separate MCP login. Local clients can control tests and read history; a remote hosted agent cannot connect directly to this localhost address.
+
+See the [MCP setup and tool reference](docs/mcp.md) for the agent workflow, example workloads, access boundaries, and a JavaScript client example.
+
+## Run your first real test
 
 1. Start a model server that exposes streaming OpenAI-compatible Chat Completions.
 2. Enter its **Endpoint URL**: for a native app and model server on the same machine, use an address such as `http://localhost:1234/v1`; for the app in Docker and the model server on the host, use `http://host.docker.internal:1234/v1`. A full `/v1/chat/completions` URL also works.
@@ -174,32 +200,6 @@ Your provider or model may impose lower limits. An output-token limit is a maxim
 
 Not supported: Responses API, native Anthropic or Ollama protocols, non-streaming requests, multimodal workloads, GPU/DCGM/Prometheus telemetry, distributed load generators, trace replay, or automated saturation search.
 
-## MCP: control tests from an AI agent
-
-An MCP server is available at **`http://127.0.0.1:4310/mcp`** whenever the app is running. Use the app's port if you changed it. Connect with the **Streamable HTTP** transport; no separate server process is needed.
-
-Agents can discover models, validate settings, start and stop benchmarks or timed stress tests, read metrics and request details, compare runs, and manage history. MCP and the web UI share one active test and the same SQLite data. Starting a test returns its ID immediately; poll for results. Closing the client does not stop a test.
-
-For clients that accept an `mcpServers` configuration with a `url` field:
-
-```json
-{
-  "mcpServers": {
-    "llm-burner": {
-      "url": "http://127.0.0.1:4310/mcp"
-    }
-  }
-}
-```
-
-Use `http://127.0.0.1:4311/mcp` if you started Compose with `PORT=4311`. Select Streamable HTTP in clients with an explicit transport setting.
-
-The server exposes **11 tools**: `get_status`, `list_models`, `validate_test_config`, `start_test`, `stop_test`, `list_runs`, `get_run`, `list_requests`, `get_request_details`, `compare_runs`, and `delete_run`.
-
-It uses stateless HTTP POST calls with SSE responses. Opening `/mcp` in a browser returns HTTP 405; connect through an MCP client instead. Access is local, with no separate MCP login. Local clients can control tests and read history; a remote hosted agent cannot connect directly to this localhost address.
-
-See the [MCP setup and tool reference](docs/mcp.md) for the agent workflow, example workloads, access boundaries, and a JavaScript client example.
-
 ## Local data and credentials
 
 Native runs bind to `127.0.0.1`; Docker listens on all interfaces inside its container and publishes only to host loopback. The app is intended for one local user. SQLite data is stored in `data/burner.sqlite` by default, or the named volume when using Compose.
@@ -280,3 +280,7 @@ See [DESIGN.md](DESIGN.md) for the interface design contract.
 Workloads and metric definitions draw on **NVIDIA AIPerf**, **GuideLLM**, and **EvalScope**; history and comparison also draw on **llm-api-bench**. LLM Burner is an independent implementation, not a full AIPerf port. These tools are not runtime dependencies.
 
 See [upstream sources and feature mapping](docs/upstream-sources.md) for pinned references and implementation boundaries.
+
+## License
+
+LLM Burner is licensed under the [MIT License](LICENSE). Third-party dependencies retain their respective licenses.

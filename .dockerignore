@@ -2,6 +2,7 @@
 # credentials, Git history, test artifacts and node_modules stay outside.
 **
 !Dockerfile
+!LICENSE
 !.dockerignore
 !package.json
 !package-lock.json
