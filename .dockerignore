@@ -1,0 +1,15 @@
+# Allow only the files needed to build and run the app. Local data,
+# credentials, Git history, test artifacts and node_modules stay outside.
+**
+!Dockerfile
+!.dockerignore
+!package.json
+!package-lock.json
+!index.html
+!vite.config.js
+!src/
+!src/**
+!shared/
+!shared/**
+!server/
+!server/**

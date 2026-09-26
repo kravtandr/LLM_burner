@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { ADVANCED_DEFAULTS as defaults, curvePeak } from '../shared/settings.mjs';
 
-const schema = z.object({
+export const configSchema = z.object({
   name: z.string().trim().max(100).default(''),
   endpoint: z.string().trim().min(1).max(2048),
   model: z.string().trim().min(1).max(200),
@@ -45,7 +45,7 @@ const schema = z.object({
 .refine(c => !c.continuousUsage || c.includeUsage, { message: 'Continuous usage requires includeUsage', path: ['continuousUsage'] });
 
 export function normalizeConfig(input) {
-  const config = schema.parse(input);
+  const config = configSchema.parse(input);
   if (config.testMode === 'stress') config.totalRequests = null;
   if (config.loadCurve.length) {
     const points = config.loadCurve;

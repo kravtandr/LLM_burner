@@ -1,0 +1,21 @@
+services:
+  llm-burner:
+    build: .
+    init: true
+    restart: unless-stopped
+    environment:
+      HOST: 0.0.0.0
+      # Keep both ports identical so browser Origin validation also works
+      # when PORT is overridden on the host.
+      PORT: ${PORT:-4310}
+      DATA_DIR: /app/data
+    ports:
+      - "127.0.0.1:${PORT:-4310}:${PORT:-4310}"
+    volumes:
+      - burner-data:/app/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    stop_grace_period: 30s
+
+volumes:
+  burner-data:

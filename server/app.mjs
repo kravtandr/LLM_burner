@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { ZodError } from 'zod';
 import { normalizeConfig, publicConfig } from './config.mjs';
 import { discoverModels } from './discovery.mjs';
+import { mountMcp } from './mcp.mjs';
 
 export function createApp({ runner, store }) {
   const app = express(); app.disable('x-powered-by');
@@ -19,10 +20,11 @@ export function createApp({ runner, store }) {
       if (req.headers['sec-fetch-site'] === 'cross-site') return res.status(403).json({ error: 'Cross-site requests are not allowed.' });
     } catch { return res.status(403).json({ error: 'Invalid origin.' }); }
     res.setHeader('X-Content-Type-Options', 'nosniff'); res.setHeader('Referrer-Policy', 'no-referrer');
-    if (req.path.startsWith('/api/')) res.setHeader('Cache-Control', 'no-store');
+    if (req.path.startsWith('/api/') || req.path === '/mcp') res.setHeader('Cache-Control', 'no-store');
     next();
   });
   app.use(express.json({ limit: '3mb' }));
+  mountMcp(app, { runner, store });
   app.get('/api/health', (req, res) => res.json({ ok: true, activeId: runner.active?.run.id ?? null }));
   app.post('/api/config/validate', (req, res) => res.json(publicConfig(normalizeConfig(req.body))));
   app.post('/api/models', async (req, res) => res.json({ models: await discoverModels(req.body) }));
@@ -65,6 +67,14 @@ export function createApp({ runner, store }) {
   app.use(express.static(resolve('dist')));
   app.get('/{*path}', (req, res) => res.sendFile(resolve('dist/index.html')));
   app.use((error, req, res, next) => {
+    if (req.path === '/mcp') {
+      const parseError = error.type === 'entity.parse.failed';
+      const oversized = error.type === 'entity.too.large';
+      return res.status(parseError ? 400 : oversized ? 413 : 500).json({ jsonrpc: '2.0', error: {
+        code: parseError ? -32700 : oversized ? -32600 : -32603,
+        message: parseError ? 'Invalid JSON.' : oversized ? 'Request body is too large.' : 'Internal MCP error.',
+      }, id: null });
+    }
     if (error instanceof ZodError) return res.status(400).json({ error: `Check these settings: ${error.issues.map(i => i.path.join('.')).join(', ')}.` });
     if (error.type === 'entity.too.large') return res.status(413).json({ error: 'Request body is too large.' });
     if (error instanceof SyntaxError) return res.status(400).json({ error: 'Invalid JSON.' });

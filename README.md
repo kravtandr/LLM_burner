@@ -8,8 +8,15 @@ LLM Burner is a local web app for benchmarking OpenAI-compatible LLM endpoints. 
 - **Stress test:** keep sending requests for a chosen duration, without a request-count limit.
 - **Simple or Advanced:** start with the essentials, then reveal scheduling, distributions, SLOs, datasets, and cost estimates.
 - **Inspect and compare:** open request/response details, compare 2–4 runs, and export results.
+- **Agent control:** connect an MCP client over Streamable HTTP to run and inspect tests.
+
+[Quick start](#quick-start) · [Test modes](#choose-a-test-mode) · [Metrics](#understand-the-main-metrics) · [MCP](#mcp-control-tests-from-an-ai-agent) · [Troubleshooting](#troubleshooting)
 
 ## Quick start
+
+Choose either a native Node.js process or Docker Compose. Both serve the same web UI and MCP endpoint. Docker keeps its history in a separate volume; it does not automatically import a native installation's data.
+
+### Run with Node.js
 
 Requires **Node.js 22.13 or newer** and npm.
 
@@ -25,10 +32,50 @@ Open [http://127.0.0.1:4310](http://127.0.0.1:4310).
 
 To try the interface without a model server, click **Demo test**. Demo runs generate synthetic streaming responses locally, make no external model requests, and are marked in the results.
 
+### Run with Docker Compose
+
+Requires Docker Engine with Compose v2 or newer, or Docker Desktop. Node.js is not needed on the host for this option.
+
+```bash
+git clone https://github.com/kravtandr/LLM_burner.git
+cd LLM_burner
+docker compose up -d --build --wait
+```
+
+Open [http://127.0.0.1:4310](http://127.0.0.1:4310). The image builds the frontend, runs Node.js as a non-root user, and includes a health check. The published port is restricted to the host's loopback interface.
+
+If port 4310 is already in use, choose another port:
+
+```bash
+PORT=4311 docker compose up -d --build --wait
+```
+
+Then open `http://127.0.0.1:4311`. Keep the same `PORT` value for subsequent Compose commands that create or recreate the container. Both container and host use the chosen port so browser-origin validation continues to work.
+
+**Connecting to a model server:** `localhost` inside the container refers to the container itself. For LM Studio or another server running on the Docker host, use `http://host.docker.internal:1234/v1` (replace the port as needed). Compose adds the host gateway mapping for Linux as well. The model server must listen on an interface reachable from Docker; a server bound only to host loopback may be unreachable, particularly on Linux. For a separate machine, use that machine's reachable IP address or hostname.
+
+**History:** the named `burner-data` volume stores `/app/data/burner.sqlite` and survives container recreation and `docker compose down`. It is separate from a native installation's `./data` directory. `docker compose down --volumes` deletes this Docker history.
+
+```bash
+docker compose ps                 # Check health
+docker compose logs -f            # Follow logs
+docker compose down              # Stop; keep history
+docker compose up -d --build --wait  # Rebuild after updating the source
+```
+
+To back up Docker history, stop the service, copy its data, then start it again:
+
+```bash
+docker compose stop
+mkdir -p backups
+docker compose cp llm-burner:/app/data ./backups/burner-data
+docker compose start
+```
+
 ### Run your first real test
 
 1. Start a model server that exposes streaming OpenAI-compatible Chat Completions.
-2. Enter its **Endpoint URL**, for example `http://localhost:1234/v1`. A full `/v1/chat/completions` URL also works.
+2. Enter its **Endpoint URL**: for a native app and model server on the same machine, use an address such as `http://localhost:1234/v1`; for the app in Docker and the model server on the host, use `http://host.docker.internal:1234/v1`. A full `/v1/chat/completions` URL also works.
 3. Enter the exact **Model** identifier, or click **Load model list** to discover models. Add an API key if your endpoint requires one.
 4. Write a prompt and choose concurrent requests, total requests, maximum output tokens, and a request timeout.
 5. Click **Run test**. Inspect **Performance**, then select a request in **Requests** to see its details.
@@ -127,9 +174,35 @@ Your provider or model may impose lower limits. An output-token limit is a maxim
 
 Not supported: Responses API, native Anthropic or Ollama protocols, non-streaming requests, multimodal workloads, GPU/DCGM/Prometheus telemetry, distributed load generators, trace replay, or automated saturation search.
 
+## MCP: control tests from an AI agent
+
+An MCP server is available at **`http://127.0.0.1:4310/mcp`** whenever the app is running. Use the app's port if you changed it. Connect with the **Streamable HTTP** transport; no separate server process is needed.
+
+Agents can discover models, validate settings, start and stop benchmarks or timed stress tests, read metrics and request details, compare runs, and manage history. MCP and the web UI share one active test and the same SQLite data. Starting a test returns its ID immediately; poll for results. Closing the client does not stop a test.
+
+For clients that accept an `mcpServers` configuration with a `url` field:
+
+```json
+{
+  "mcpServers": {
+    "llm-burner": {
+      "url": "http://127.0.0.1:4310/mcp"
+    }
+  }
+}
+```
+
+Use `http://127.0.0.1:4311/mcp` if you started Compose with `PORT=4311`. Select Streamable HTTP in clients with an explicit transport setting.
+
+The server exposes **11 tools**: `get_status`, `list_models`, `validate_test_config`, `start_test`, `stop_test`, `list_runs`, `get_run`, `list_requests`, `get_request_details`, `compare_runs`, and `delete_run`.
+
+It uses stateless HTTP POST calls with SSE responses. Opening `/mcp` in a browser returns HTTP 405; connect through an MCP client instead. Access is local, with no separate MCP login. Local clients can control tests and read history; a remote hosted agent cannot connect directly to this localhost address.
+
+See the [MCP setup and tool reference](docs/mcp.md) for the agent workflow, example workloads, access boundaries, and a JavaScript client example.
+
 ## Local data and credentials
 
-The app binds to `127.0.0.1` and is intended for one local user. SQLite data is stored in `data/burner.sqlite` by default.
+Native runs bind to `127.0.0.1`; Docker listens on all interfaces inside its container and publishes only to host loopback. The app is intended for one local user. SQLite data is stored in `data/burner.sqlite` by default, or the named volume when using Compose.
 
 - **Saved locally:** prompts, endpoint URLs, model names, settings, dates, metrics, and captured request/response payloads. Browser storage also remembers connection history.
 - **API keys:** held in memory for requests, omitted from saved configurations, and redacted from captured payloads. Authorization headers are never captured. Imports discard API keys; re-enter them after refresh or reuse.
@@ -137,11 +210,23 @@ The app binds to `127.0.0.1` and is intended for one local user. SQLite data is 
 - **Recovery:** completed request records survive a restart. Unfinished runs become interrupted; in-flight requests are not resumed.
 - **Backup:** stop the server, then copy the data directory. Prompts and responses may contain sensitive information; review exports before sharing them.
 
-To change the port or data directory:
+For a native run, change the port or data directory with:
 
 ```bash
 PORT=4320 DATA_DIR=./my-data npm start
 ```
+
+## Troubleshooting
+
+| Symptom | What to check |
+| --- | --- |
+| Port 4310 is already in use | Stop the existing app, or use `PORT=4311` when starting Node.js or Compose. Point the browser and MCP client at the selected port. |
+| Docker cannot reach the model server | Use `host.docker.internal` for a server on the host, and make sure its listening interface and firewall allow connections from Docker. |
+| Model discovery fails | Check the base URL and API key. If the endpoint does not implement `/models`, enter the model identifier manually. |
+| Token throughput shows a dash | The endpoint may not report streaming usage. Enable usage reporting if supported; LLM Burner does not infer tokens from chunks. |
+| MCP returns HTTP 405 | Use a Streamable HTTP MCP client with the `/mcp` URL. Browser GET requests and legacy SSE connections are not supported. |
+| MCP reports an active test | The UI and all agents share one test slot. Inspect it with `get_status`, wait, or explicitly stop that run. |
+| History appears empty after switching to Docker | Native `./data` and the Docker volume are separate databases. Keep the same launch mode and volume to retain the same history. |
 
 ## Development
 
@@ -161,6 +246,16 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
+To verify the Docker setup end to end (requires host Node.js and a running Docker daemon):
+
+```bash
+npm run test:docker
+# If the smoke-test port is occupied:
+DOCKER_TEST_PORT=14311 npm run test:docker
+```
+
+This builds an isolated Compose project on port 14310, checks the UI assets and API, runs MCP-driven streaming benchmark and stress workloads against a local fixture through the host gateway, and verifies history after container recreation. It removes its own containers and test volume afterward; it does not touch your regular history. The fixture listens temporarily on a host interface reachable by Docker.
+
 Tests use local HTTP/SSE fixtures and synthetic demo responses; no external model is required. Browser tests run a separate server on port 4319 and use `test-results/e2e-data`. Build the frontend before running browser tests.
 
 | Path | Responsibility |
@@ -172,8 +267,11 @@ Tests use local HTTP/SSE fixtures and synthetic demo responses; no external mode
 | `server/store.mjs` | SQLite persistence and recovery |
 | `server/request-capture.mjs` | Bounded request/response capture and redaction |
 | `server/app.mjs` | Local HTTP API |
+| `server/mcp.mjs` | MCP tools and Streamable HTTP transport |
 | `shared/settings.mjs` | Shared defaults and portable settings |
-| `tests/` | Server and browser tests |
+| `tests/` | Server, MCP, and browser tests |
+| `Dockerfile`, `compose.yaml` | Container build, health check, and persistent volume |
+| `scripts/docker-smoke.mjs` | Isolated Docker and MCP integration check |
 
 See [DESIGN.md](DESIGN.md) for the interface design contract.
 
